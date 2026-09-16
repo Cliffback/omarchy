@@ -266,11 +266,14 @@ grep -q '"LogPixels"=dword:00000060' "$winereg_dir/user.reg" ||
   fail "Affinity launcher refuses to write a zero DPI" "$(cat "$winereg_dir/user.reg")"
 pass "Affinity launcher refuses to write a zero DPI"
 
-# The window rules center Affinity's dialogs and keep the canvas opaque.
+# The window rules keep Affinity's canvas opaque, and deliberately do not
+# center it: Wine draws each menu-bar dropdown as its own top-level window that
+# no rule can tell from a real dialog, so centering lands the menus in the
+# middle of the screen instead of under File/Edit.
 apps_rule="$ROOT/default/hypr/apps/affinity.lua"
 [[ -f $apps_rule ]] || fail "Affinity window rules are shipped"
-grep -q 'center = true' "$apps_rule" ||
-  fail "Affinity window rules center the dialogs"
+grep -q 'center = true' "$apps_rule" &&
+  fail "Affinity window rules leave the menus where Wine puts them" "$(cat "$apps_rule")"
 grep -q 'tag = "-default-opacity"' "$apps_rule" ||
   fail "Affinity window rules keep the canvas opaque"
-pass "Affinity window rules center dialogs and keep the canvas opaque"
+pass "Affinity window rules keep the canvas opaque without centering the menus"
