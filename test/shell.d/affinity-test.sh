@@ -157,3 +157,12 @@ grep -qx 'omarchy-pkg-drop:affinity-appimage-bin' "$log" ||
 grep -qx 'text/plain=nvim.desktop' "$HOME/.config/mimeapps.list" ||
   fail "Affinity removal leaves unrelated defaults alone"
 pass "Affinity removal drops the package and clears only its own defaults"
+
+# The window rules center Affinity's dialogs and keep the canvas opaque.
+apps_rule="$ROOT/default/hypr/apps/affinity.lua"
+[[ -f $apps_rule ]] || fail "Affinity window rules are shipped"
+grep -q 'center = true' "$apps_rule" ||
+  fail "Affinity window rules center the dialogs"
+grep -q 'tag = "-default-opacity"' "$apps_rule" ||
+  fail "Affinity window rules keep the canvas opaque"
+pass "Affinity window rules center dialogs and keep the canvas opaque"
