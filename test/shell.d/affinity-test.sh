@@ -108,7 +108,7 @@ fresh_home
   fail "Affinity install lands the MIME definitions"
 [[ -f $HOME/.local/share/applications/affinity.desktop ]] ||
   fail "Affinity install lands the desktop entry"
-[[ -f $HOME/.local/share/icons/hicolor/256x256/apps/affinity.png ]] ||
+[[ -f $HOME/.local/share/icons/hicolor/512x512/apps/affinity.png ]] ||
   fail "Affinity install lands the icon the desktop entry names"
 pass "Affinity install lands the opener, MIME definitions, desktop entry, and icon"
 
@@ -145,7 +145,7 @@ mkdir -p "$HOME/.config"
 for gone in .local/bin/affinity-open \
   .local/share/mime/packages/affinity-filetypes.xml \
   .local/share/applications/affinity.desktop \
-  .local/share/icons/hicolor/256x256/apps/affinity.png; do
+  .local/share/icons/hicolor/512x512/apps/affinity.png; do
   [[ ! -e $HOME/$gone ]] || fail "Affinity removal deletes the files it installed" "$gone"
 done
 pass "Affinity removal deletes the files it installed"

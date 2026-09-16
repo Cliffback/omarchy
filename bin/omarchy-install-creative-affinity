@@ -11,7 +11,7 @@ omarchy-pkg-aur-add affinity-appimage-bin
 # the MIME definitions, the launcher entry, and the icon all come from Omarchy.
 # The packaged icon lands in the system hicolor theme, but a dev-linked checkout
 # never reaches /usr/share/icons, so install a user copy the entry can name.
-icon_dir="$HOME/.local/share/icons/hicolor/256x256/apps"
+icon_dir="$HOME/.local/share/icons/hicolor/512x512/apps"
 mkdir -p "$icon_dir"
 install -m 644 "$OMARCHY_PATH/applications/icons/affinity.png" \
   "$icon_dir/affinity.png"

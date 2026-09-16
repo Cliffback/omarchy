@@ -23,7 +23,7 @@ fi
 rm -f "$HOME/.local/share/applications/affinity.desktop"
 rm -f "$HOME/.local/bin/affinity-open"
 rm -f "$mime_xml"
-rm -f "$HOME/.local/share/icons/hicolor/256x256/apps/affinity.png"
+rm -f "$HOME/.local/share/icons/hicolor/512x512/apps/affinity.png"
 gtk-update-icon-cache "$HOME/.local/share/icons/hicolor" &>/dev/null || true
 
 update-mime-database "$HOME/.local/share/mime"
