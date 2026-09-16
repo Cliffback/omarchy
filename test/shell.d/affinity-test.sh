@@ -158,6 +158,114 @@ grep -qx 'text/plain=nvim.desktop' "$HOME/.config/mimeapps.list" ||
   fail "Affinity removal leaves unrelated defaults alone"
 pass "Affinity removal drops the package and clears only its own defaults"
 
+# The launcher computes the Wine system DPI from the focused monitor scale and
+# writes it into the prefix's registry. Its own commands are stubbed so the test
+# never touches the developer's Hyprland session or Affinity install.
+launcher="$ROOT/bin/omarchy-launch-affinity"
+
+cat >"$tmp_dir/bin/hyprctl" <<'SCRIPT'
+#!/bin/bash
+printf '%s\n' "${AFFINITY_TEST_MONITORS-1.25}"
+SCRIPT
+chmod +x "$tmp_dir/bin/hyprctl"
+
+cat >"$tmp_dir/bin/jq" <<'SCRIPT'
+#!/bin/bash
+# The launcher only uses jq to read the focused scale and to multiply it.
+# Answer both shapes without depending on the real jq being installed. The
+# unset-only default keeps an explicitly empty scale empty, which is what a
+# failed hyprctl produces.
+if [[ $* == *"select(.focused"* ]]; then
+  cat >/dev/null
+  printf '%s\n' "${AFFINITY_TEST_MONITORS-1.25}"
+else
+  awk -v scale="${AFFINITY_TEST_MONITORS-1.25}" 'BEGIN { printf "%d\n", scale * 96 + 0.5 }'
+fi
+SCRIPT
+chmod +x "$tmp_dir/bin/jq"
+
+cat >"$tmp_dir/bin/pgrep" <<'SCRIPT'
+#!/bin/bash
+exit "${AFFINITY_TEST_RUNNING:-1}"
+SCRIPT
+chmod +x "$tmp_dir/bin/pgrep"
+
+cat >"$tmp_dir/bin/affinity" <<'SCRIPT'
+#!/bin/bash
+printf 'affinity:%s\n' "$*" >>"$TEST_LOG"
+SCRIPT
+chmod +x "$tmp_dir/bin/affinity"
+
+launcher_home="$tmp_dir/launcher-home"
+winereg_dir="$launcher_home/.AffinityLinux-Appimage"
+mkdir -p "$winereg_dir"
+printf '"LogPixels"=dword:00000060\n' >"$winereg_dir/user.reg"
+printf '"LogPixels"=dword:00000060\n' >"$winereg_dir/system.reg"
+
+run_launcher() {
+  HOME="$launcher_home" \
+    PATH="$tmp_dir/bin:$PATH" \
+    OMARCHY_AFFINITY_BIN="$tmp_dir/bin/affinity" \
+    TEST_LOG="$log" \
+    "$launcher" "$@"
+}
+
+# 1.25 scale -> 120 DPI -> 0x78.
+: >"$log"
+run_launcher
+grep -q '"LogPixels"=dword:00000078' "$winereg_dir/user.reg" ||
+  fail "Affinity launcher scales DPI to the focused monitor" "$(cat "$winereg_dir/user.reg")"
+grep -q '"LogPixels"=dword:00000078' "$winereg_dir/system.reg" ||
+  fail "Affinity launcher scales DPI in both registry files"
+grep -qx 'affinity:' "$log" ||
+  fail "Affinity launcher starts the app after writing DPI" "$(cat "$log")"
+pass "Affinity launcher scales DPI to the focused monitor"
+
+# The override wins over the computed value: 96 -> 0x60.
+: >"$log"
+printf '"LogPixels"=dword:00000078\n' >"$winereg_dir/user.reg"
+printf '"LogPixels"=dword:00000078\n' >"$winereg_dir/system.reg"
+HOME="$launcher_home" \
+  PATH="$tmp_dir/bin:$PATH" \
+  OMARCHY_AFFINITY_BIN="$tmp_dir/bin/affinity" \
+  OMARCHY_AFFINITY_DPI=96 \
+  TEST_LOG="$log" \
+  "$launcher" >/dev/null
+grep -q '"LogPixels"=dword:00000060' "$winereg_dir/user.reg" ||
+  fail "Affinity launcher honors the DPI override" "$(cat "$winereg_dir/user.reg")"
+pass "Affinity launcher honors the DPI override"
+
+# A running Affinity must not block or rewrite the registry: the live window
+# already has its DPI, and the running wineserver would clobber the edit.
+: >"$log"
+printf '"LogPixels"=dword:00000060\n' >"$winereg_dir/user.reg"
+printf '"LogPixels"=dword:00000060\n' >"$winereg_dir/system.reg"
+HOME="$launcher_home" \
+  PATH="$tmp_dir/bin:$PATH" \
+  OMARCHY_AFFINITY_BIN="$tmp_dir/bin/affinity" \
+  AFFINITY_TEST_RUNNING=0 \
+  TEST_LOG="$log" \
+  "$launcher" >/dev/null
+grep -q '"LogPixels"=dword:00000060' "$winereg_dir/user.reg" ||
+  fail "Affinity launcher leaves the registry alone while Affinity runs"
+grep -qx 'affinity:' "$log" ||
+  fail "Affinity launcher forwards to the running instance"
+pass "Affinity launcher forwards without blocking while Affinity runs"
+
+# A failed hyprctl leaves the scale empty; the launcher must not write DPI 0.
+: >"$log"
+printf '"LogPixels"=dword:00000060\n' >"$winereg_dir/user.reg"
+printf '"LogPixels"=dword:00000060\n' >"$winereg_dir/system.reg"
+HOME="$launcher_home" \
+  PATH="$tmp_dir/bin:$PATH" \
+  OMARCHY_AFFINITY_BIN="$tmp_dir/bin/affinity" \
+  AFFINITY_TEST_MONITORS="" \
+  TEST_LOG="$log" \
+  "$launcher" >/dev/null
+grep -q '"LogPixels"=dword:00000060' "$winereg_dir/user.reg" ||
+  fail "Affinity launcher refuses to write a zero DPI" "$(cat "$winereg_dir/user.reg")"
+pass "Affinity launcher refuses to write a zero DPI"
+
 # The window rules center Affinity's dialogs and keep the canvas opaque.
 apps_rule="$ROOT/default/hypr/apps/affinity.lua"
 [[ -f $apps_rule ]] || fail "Affinity window rules are shipped"
