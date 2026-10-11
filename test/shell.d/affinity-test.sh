@@ -53,6 +53,11 @@ export TEST_LOG="$log"
 export PATH="$tmp_dir/bin:$PATH"
 export OMARCHY_PATH="$ROOT"
 
+# xdg-mime honors XDG_CONFIG_HOME, and the remover must look where it wrote.
+# Keep the variable under the test's control so a developer's global value
+# cannot divert the mimeapps.list the assertions read.
+unset XDG_CONFIG_HOME
+
 install_script="$ROOT/bin/omarchy-install-creative-affinity"
 remove_script="$ROOT/bin/omarchy-remove-creative-affinity"
 
@@ -157,6 +162,29 @@ grep -qx 'omarchy-pkg-drop:affinity-appimage-bin' "$log" ||
 grep -qx 'text/plain=nvim.desktop' "$HOME/.config/mimeapps.list" ||
   fail "Affinity removal leaves unrelated defaults alone"
 pass "Affinity removal drops the package and clears only its own defaults"
+
+# xdg-mime writes defaults to $XDG_CONFIG_HOME/mimeapps.list when it is set, so
+# removal has to clean the same file or the types keep pointing at the deleted
+# entry.
+fresh_home
+export XDG_CONFIG_HOME="$tmp_dir/xdg-config"
+mkdir -p "$XDG_CONFIG_HOME"
+"$install_script" >/dev/null
+{
+  printf '[Default Applications]\n'
+  printf 'application/af=affinity.desktop\n'
+  printf 'text/plain=nvim.desktop\n'
+} >"$XDG_CONFIG_HOME/mimeapps.list"
+
+: >"$log"
+"$remove_script" >/dev/null
+
+! grep -q '^application/af=affinity.desktop$' "$XDG_CONFIG_HOME/mimeapps.list" ||
+  fail "Affinity removal clears defaults in a custom XDG_CONFIG_HOME" "$(cat "$XDG_CONFIG_HOME/mimeapps.list")"
+grep -qx 'text/plain=nvim.desktop' "$XDG_CONFIG_HOME/mimeapps.list" ||
+  fail "Affinity removal leaves unrelated defaults in a custom XDG_CONFIG_HOME alone"
+pass "Affinity removal honors XDG_CONFIG_HOME"
+unset XDG_CONFIG_HOME
 
 # The launcher computes the Wine system DPI from the focused monitor scale and
 # writes it into the prefix's registry. Its own commands are stubbed so the test

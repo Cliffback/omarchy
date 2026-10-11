@@ -12,7 +12,7 @@ omarchy-pkg-drop affinity-appimage-bin
 # definitions before those are deleted, so removal does not depend on a
 # hard-coded list staying in step with the XML.
 mime_xml="$HOME/.local/share/mime/packages/affinity-filetypes.xml"
-mimeapps="$HOME/.config/mimeapps.list"
+mimeapps="${XDG_CONFIG_HOME:-$HOME/.config}/mimeapps.list"
 
 if [[ -f $mime_xml && -f $mimeapps ]]; then
   while IFS= read -r mime_type; do
