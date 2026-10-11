@@ -25,6 +25,13 @@ if [[ -d $WINEPREFIX ]]; then
     sleep 0.5
   done
 
+  # A wineserver that outlived the wait still holds the old registry in memory
+  # and rewrites user.reg when it exits, so a LogPixels edit now would be
+  # undone. Launch at whatever DPI the running server already has rather than
+  # write a value that cannot stick.
+  wineserver_live=false
+  pgrep -f "mount_affini.*wineserver" >/dev/null 2>&1 && wineserver_live=true
+
   # The AppImage's first-run setup renames drive_c/users/<baked> to the current
   # user but rewrites the registry with a sed that never matches the doubled
   # backslashes in .reg. HKCU\Environment keeps pointing TEMP/TMP at the old
@@ -58,7 +65,7 @@ if [[ -d $WINEPREFIX ]]; then
 
   # Only write a real positive integer. A failed hyprctl or jq leaves DPI empty,
   # and printf would turn that into dword:00000000, i.e. DPI 0.
-  if [[ $DPI =~ ^[0-9]+$ ]] && (( DPI > 0 )); then
+  if [[ $wineserver_live == false && $DPI =~ ^[0-9]+$ ]] && (( DPI > 0 )); then
     HEX=$(printf '%08x' "$DPI")
     for reg in "$WINEPREFIX/user.reg" "$WINEPREFIX/system.reg"; do
       if [[ -f $reg ]]; then

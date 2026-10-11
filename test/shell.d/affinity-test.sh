@@ -184,11 +184,29 @@ fi
 SCRIPT
 chmod +x "$tmp_dir/bin/jq"
 
+# The launcher asks pgrep two different questions: whether Affinity is already
+# running, and whether a wineserver is still alive. A real pgrep matches its
+# pattern, so answer per pattern and let a test hold the wineserver alive while
+# Affinity itself is not running.
 cat >"$tmp_dir/bin/pgrep" <<'SCRIPT'
 #!/bin/bash
-exit "${AFFINITY_TEST_RUNNING:-1}"
+for arg in "$@"; do
+  case "$arg" in
+    *Affinity.exe*) exit "${AFFINITY_TEST_RUNNING:-1}" ;;
+    *wineserver*) exit "${AFFINITY_TEST_WINESERVER:-1}" ;;
+  esac
+done
+exit 1
 SCRIPT
 chmod +x "$tmp_dir/bin/pgrep"
+
+# The wait loop backs off with sleep; stub it so a case that keeps the
+# wineserver alive does not add real seconds to the suite.
+cat >"$tmp_dir/bin/sleep" <<'SCRIPT'
+#!/bin/bash
+exit 0
+SCRIPT
+chmod +x "$tmp_dir/bin/sleep"
 
 cat >"$tmp_dir/bin/affinity" <<'SCRIPT'
 #!/bin/bash
@@ -258,6 +276,29 @@ grep -q '"LogPixels"=dword:00000060' "$winereg_dir/user.reg" ||
 grep -qx 'affinity:' "$log" ||
   fail "Affinity launcher forwards to the running instance"
 pass "Affinity launcher forwards without blocking while Affinity runs"
+
+# A wineserver that outlives the bounded wait still owns the registry and
+# rewrites user.reg when it exits, so a LogPixels edit made now would be
+# clobbered. Affinity is not running, but the server is, so the launcher must
+# launch without touching the registry.
+: >"$log"
+printf '"LogPixels"=dword:00000060\n' >"$winereg_dir/user.reg"
+printf '"LogPixels"=dword:00000060\n' >"$winereg_dir/system.reg"
+HOME="$launcher_home" \
+  PATH="$tmp_dir/bin:$PATH" \
+  OMARCHY_AFFINITY_BIN="$tmp_dir/bin/affinity" \
+  AFFINITY_TEST_WINESERVER=0 \
+  TEST_LOG="$log" \
+  "$launcher" >/dev/null
+grep -q '"LogPixels"=dword:00000060' "$winereg_dir/user.reg" ||
+  fail "Affinity launcher leaves the registry alone when the wineserver outlives the wait" \
+    "$(cat "$winereg_dir/user.reg")"
+grep -q '"LogPixels"=dword:00000060' "$winereg_dir/system.reg" ||
+  fail "Affinity launcher leaves system.reg alone when the wineserver outlives the wait" \
+    "$(cat "$winereg_dir/system.reg")"
+grep -qx 'affinity:' "$log" ||
+  fail "Affinity launcher still starts the app when the wineserver outlives the wait"
+pass "Affinity launcher skips registry edits when the wineserver outlives the wait"
 
 # A failed hyprctl leaves the scale empty; the launcher must not write DPI 0.
 : >"$log"
